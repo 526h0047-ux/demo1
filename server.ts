@@ -10,16 +10,18 @@ import nodemailer from 'nodemailer';
 dotenv.config();
 
 // Gmail SMTP Credentials for Real Email Verification
-const GMAIL_USER = process.env.GMAIL_USER || 'deffqsqw@gmail.com';
-const GMAIL_PASS = (process.env.GMAIL_APP_PASSWORD || 'fexx ppts bpqu fojd').replace(/\s+/g, '');
+const GMAIL_USER = process.env.GMAIL_USER || '';
+const GMAIL_PASS = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 
-const mailTransporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: GMAIL_USER,
-    pass: GMAIL_PASS,
-  },
-});
+const mailTransporter = (GMAIL_USER && GMAIL_PASS)
+  ? nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: GMAIL_USER,
+        pass: GMAIL_PASS,
+      },
+    })
+  : null;
 
 // Fallback load Gemini key from container environment file if available
 if (!process.env.GEMINI_API_KEY && fs.existsSync('/app/.dev.env.json')) {
@@ -909,19 +911,23 @@ app.post('/api/auth/send-verification-email', async (req, res) => {
 
     console.log(`[GigMe Mailer] Sending verification email with OTP ${otp} to ${cleanEmail}...`);
 
-    // Dispatch email via Gmail SMTP
-    await mailTransporter.sendMail({
-      from: `"GigMe Campus Security" <${GMAIL_USER}>`,
-      to: cleanEmail,
-      subject: `[GigMe Campus] Mã Xác Thực Kích Hoạt Tài Khoản: ${otp}`,
-      html: buildVerificationEmailHtml({
-        userName: userName || cleanEmail.split('@')[0],
-        otp,
-        verifyUrl,
-      }),
-    });
+    // Dispatch email via Gmail SMTP (or mock in development)
+    if (mailTransporter) {
+      await mailTransporter.sendMail({
+        from: `"GigMe Campus Security" <${GMAIL_USER}>`,
+        to: cleanEmail,
+        subject: `[GigMe Campus] Mã Xác Thực Kích Hoạt Tài Khoản: ${otp}`,
+        html: buildVerificationEmailHtml({
+          userName: userName || cleanEmail.split('@')[0],
+          otp,
+          verifyUrl,
+        }),
+      });
+      console.log(`[GigMe Mailer] Email sent successfully to ${cleanEmail}`);
+    } else {
+      console.log(`[GigMe Mailer Dev] GMAIL_USER/GMAIL_APP_PASSWORD not set. OTP for ${cleanEmail} is ${otp}`);
+    }
 
-    console.log(`[GigMe Mailer] Email sent successfully to ${cleanEmail}`);
     res.json({
       success: true,
       message: `Đã gửi mã xác thực tới ${cleanEmail}. Vui lòng kiểm tra hộp thư!`,
